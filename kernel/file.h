@@ -1,7 +1,22 @@
+#define PIPESIZE 512
+#define NPIPE 16 // Make sure this matches what was in pipe.c
+
+struct pipe {
+  struct spinlock lock;
+  char data[PIPESIZE]; // PIPESIZE is defined in pipe.c, so move that too.
+  uint nread;     // number of bytes read
+  uint nwrite;    // number of bytes written
+  int readopen;   // read fd is open
+  int writeopen;  // write fd is open
+};
+
+extern struct pipe pipes[NPIPE];
+
 struct file {
   enum { FD_NONE, FD_PIPE, FD_INODE, FD_DEVICE } type;
   int ref; // reference count
   char readable;
+  char nonblock;
   char writable;
   struct pipe *pipe; // FD_PIPE
   struct inode *ip;  // FD_INODE and FD_DEVICE
@@ -26,7 +41,8 @@ struct inode {
   short minor;
   short nlink;
   uint size;
-  uint addrs[NDIRECT+1];
+  uint addrs[NDIRECT+1]; // Data block addresses
+  struct pipe *pipe; // Pointer to pipe structure if T_FIFO
 };
 
 // map major device number to device functions.

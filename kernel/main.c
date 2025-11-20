@@ -3,8 +3,12 @@
 #include "memlayout.h"
 #include "riscv.h"
 #include "defs.h"
+#include "spinlock.h"
 
 volatile static int started = 0;
+
+struct spinlock tickslock;
+uint ticks;
 
 // start() jumps here in supervisor mode on all CPUs.
 void

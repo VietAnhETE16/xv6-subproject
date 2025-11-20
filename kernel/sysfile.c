@@ -349,27 +349,111 @@ sys_open(void)
     return -1;
   }
 
-  if(ip->type == T_DEVICE){
+  if(ip->type == T_FIFO) {
+    // We already hold the ilock(ip)
+    
+    // 1. Find or associate the in-memory pipe
+    if(ip->pipe == 0){
+      struct pipe *p = 0;
+      for(p = pipes; p < &pipes[NPIPE]; p++){
+        acquire(&p->lock);
+        if(p->readopen == 0 && p->writeopen == 0){
+          p->readopen = 1; p->writeopen = 1;
+          p->nread = 0; p->nwrite = 0;
+          ip->pipe = p; // Associate with the inode
+          release(&p->lock);
+          break;
+        }
+        release(&p->lock);
+      }
+      if(ip->pipe == 0){ // No free pipe
+        myproc()->ofile[fd] = 0;
+        f->type = FD_NONE; f->ref = 0;
+        iunlockput(ip);
+        end_op();
+        return -1;
+      }
+    }
+    
+    struct pipe *p = ip->pipe;
+    acquire(&p->lock);
+    
+    // *** THE FIX: Unlock inode *before* blocking ***
+    iunlock(ip);
+    
+    // 2. Set up the file struct
+    f->type = FD_PIPE;
+    f->ip = ip; // ip->ref is > 0 from namei/create
+    f->pipe = p;
+    f->readable = !(omode & O_WRONLY);
+    f->writable = (omode & O_WRONLY) || (omode & O_RDWR);
+
+    // 3. Increment read/write counts
+    if(f->readable){ p->nread++; }
+    if(f->writable){ p->nwrite++; }
+
+    // 4. Handle POSIX blocking open
+    if(f->readable){
+      while(p->nwrite == 0){
+        if(myproc()->killed){
+          p->nread--;
+          release(&p->lock);
+          myproc()->ofile[fd] = 0;
+          f->type = FD_NONE; f->ref = 0;
+          iput(ip); // Manually iput
+          end_op();
+          return -1;
+        }
+        sleep(&p->nread, &p->lock);
+      }
+    }
+    if(f->writable){
+      while(p->nread == 0){
+        if(myproc()->killed){
+          p->nwrite--;
+          release(&p->lock);
+          myproc()->ofile[fd] = 0;
+          f->type = FD_NONE; f->ref = 0;
+          iput(ip); // Manually iput
+          end_op();
+          return -1;
+        }
+        sleep(&p->nwrite, &p->lock);
+      }
+    }
+
+    // 5. Wake up any waiting partners
+    wakeup(&p->nread);
+    wakeup(&p->nwrite);
+
+    release(&p->lock);
+    end_op();
+    return fd; // Return early, we already unlocked
+    
+  } else if(ip->type == T_DEVICE){
     f->type = FD_DEVICE;
     f->major = ip->major;
+    f->ip = ip;
+    f->readable = !(omode & O_WRONLY);
+    f->writable = (omode & O_WRONLY) || (omode & O_RDWR);
   } else {
     f->type = FD_INODE;
     f->off = 0;
+    f->ip = ip;
+    f->readable = !(omode & O_WRONLY);
+    f->writable = (omode & O_WRONLY) || (omode & O_RDWR);
   }
-  f->ip = ip;
-  f->readable = !(omode & O_WRONLY);
-  f->writable = (omode & O_WRONLY) || (omode & O_RDWR);
-
+  
   if((omode & O_TRUNC) && ip->type == T_FILE){
     itrunc(ip);
   }
 
+  // This iunlock is now only for T_FILE, T_DIR, T_DEVICE
   iunlock(ip);
   end_op();
 
   return fd;
 }
-
 uint64
 sys_mkdir(void)
 {
@@ -501,5 +585,29 @@ sys_pipe(void)
     fileclose(wf);
     return -1;
   }
+  return 0;
+}
+
+uint64
+sys_mkfifo(void)
+{
+  char path[MAXPATH];
+  struct inode *ip;
+
+  begin_op();
+  if(argstr(0, path, MAXPATH) < 0) {
+    end_op();
+    return -1;
+  }
+
+  // create() is in kernel/fs.c. It creates a new inode.
+  // We pass 0, 0 for major/minor device numbers.
+  if((ip = create(path, T_FIFO, 0, 0)) == 0){
+    end_op();
+    return -1;
+  }
+
+  iunlockput(ip); // create() returns a locked inode, unlock and release it.
+  end_op();
   return 0;
 }

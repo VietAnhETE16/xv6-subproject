@@ -60,6 +60,7 @@ void
 fileclose(struct file *f)
 {
   struct file ff;
+  struct pipe *p; // For FIFO logic
 
   acquire(&ftable.lock);
   if(f->ref < 1)
@@ -74,8 +75,35 @@ fileclose(struct file *f)
   release(&ftable.lock);
 
   if(ff.type == FD_PIPE){
-    pipeclose(ff.pipe, ff.writable);
-  } else if(ff.type == FD_INODE || ff.type == FD_DEVICE){
+    p = ff.pipe;
+    pipeclose(p, ff.writable);
+
+    // BEGIN FIFO MODIFICATION
+    // If it was a named pipe (it has an inode)
+    if(ff.ip){
+      // Check if the pipe is now fully closed
+      acquire(&p->lock);
+      int is_dead = (p->nread == 0 && p->nwrite == 0);
+      release(&p->lock);
+
+      if(is_dead){
+        // Last reference is gone. Detach the pipe from the inode.
+        // We do this before iput() to avoid races.
+        begin_op();
+        ilock(ff.ip);
+        if(ff.ip->type == T_FIFO){
+          ff.ip->pipe = 0; // Detach
+        }
+        iunlock(ff.ip);
+        end_op();
+      }
+    }
+    // END FIFO MODIFICATION
+  }
+
+  // MODIFIED: This is no longer an "else if".
+  // We must call iput() for INODE, DEVICE, *and* named PIPE.
+  if(ff.type == FD_INODE || ff.type == FD_DEVICE || (ff.type == FD_PIPE && ff.ip != 0)){
     begin_op();
     iput(ff.ip);
     end_op();

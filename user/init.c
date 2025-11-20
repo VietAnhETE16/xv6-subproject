@@ -16,10 +16,19 @@ main(void)
 {
   int pid, wpid;
 
-  if(open("console", O_RDWR) < 0){
-    mknod("console", CONSOLE, 0);
-    open("console", O_RDWR);
+  // BEGIN MODIFIED DEVICE SETUP
+  // Create the /dev directory and console device
+  if(open("dev/console", O_RDWR) < 0){
+    mkdir("dev");
+    mknod("dev/console", CONSOLE, 0);
+    open("dev/console", O_RDWR);
   }
+  
+  // Create the directory for named pipes
+  mkdir("dev/fifo");
+  // END MODIFIED DEVICE SETUP
+
+  // Set up standard input, output, and error
   dup(0);  // stdout
   dup(0);  // stderr
 

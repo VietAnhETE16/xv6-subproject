@@ -107,3 +107,29 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64
+sys_sleep(void)
+{
+  int n;
+  uint start_ticks;
+
+  // THE FIX: We just call argint() and assume it works.
+  // We do not check its return value because it is void.
+  argint(0, &n);
+  
+  acquire(&tickslock);
+  start_ticks = ticks;
+  // Loop until 'n' ticks have passed
+  while(ticks - start_ticks < n){
+    if(myproc()->killed){
+      release(&tickslock);
+      return -1;
+    }
+    // sleep() on the address of ticks, using tickslock
+    sleep(&ticks, &tickslock);
+  }
+  release(&tickslock);
+  
+  return 0;
+}
