@@ -17,7 +17,7 @@ main(void)
     // 1. Open the pipe (Block until Sender is ready)
     fd = open(FIFO_PATH, O_RDONLY);
     if(fd < 0){
-        printf("Receiver: Error - Did you run log_sender?\n");
+        printf("Receiver: Error - Did you run logwriter?\n");
         exit(1);
     }
 

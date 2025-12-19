@@ -24,7 +24,6 @@ main(void)
     int fd;
 
     // 1. Create the named pipe
-    // We ignore error if it already exists
     mkfifo(FIFO_PATH); 
 
     printf("Sender: Waiting for a receiver to connect...\n");
@@ -36,6 +35,8 @@ main(void)
         exit(1);
     }
     
+    // Sleep briefly to let the Receiver print "Connected" first
+    sleep(10);
     printf("Sender: Connected! Starting to send logs...\n");
 
     // 3. Send 5 messages
@@ -50,10 +51,16 @@ main(void)
         msg[p] = 0;
 
         write(fd, msg, p);
+
+        // --- THE FIX ---
+        // Sleep for 10 ticks to let the Receiver wake up and 
+        // print its "Received" message FIRST.
+        sleep(10); 
+        
         printf("Sender: Sent 'log message %d'\n", i);
         
-        // Sleep to simulate live streaming and let Receiver print cleanly
-        sleep(20); 
+        // Wait a bit before sending the next one
+        sleep(10); 
     }
 
     close(fd);
