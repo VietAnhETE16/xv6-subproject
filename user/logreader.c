@@ -1,31 +1,35 @@
 #include "kernel/types.h"
 #include "kernel/stat.h"
-#include "user/user.h"
 #include "kernel/fcntl.h"
+#include "user/user.h"
 
-int main(void)
+#define FIFO_PATH "/dev/fifo/mylog"
+
+int
+main(void)
 {
-  char *path = "/dev/fifo/mylog";
-  char buf[100];
+    char buf[128];
+    int fd;
+    int n;
 
-  printf("logreader: opening fifo for read...\n");
-  // This open() will block until the writer opens its end
-  int fd = open(path, O_RDONLY);
-  if(fd < 0){
-    fprintf(2, "logreader: open failed\n");
-    exit(1);
-  }
+    printf("Receiver: Connecting to pipe...\n");
 
-  printf("logreader: reading logs...\n");
-  while(1){
-    int n = read(fd, buf, sizeof(buf));
-    if(n <= 0){
-      break; // Writer closed
+    // 1. Open the pipe (Block until Sender is ready)
+    fd = open(FIFO_PATH, O_RDONLY);
+    if(fd < 0){
+        printf("Receiver: Error - Did you run log_sender?\n");
+        exit(1);
     }
-    printf("logreader: read '%s'\n", buf);
-  }
 
-  close(fd);
-  printf("logreader: done\n");
-  exit(0);
+    printf("Receiver: Connected! Listening for logs...\n");
+
+    // 2. Read loop
+    while((n = read(fd, buf, sizeof(buf)-1)) > 0){
+        buf[n] = 0; // Null terminate
+        printf("Receiver: Received -> %s", buf);
+    }
+
+    close(fd);
+    printf("Receiver: Pipe closed. Exiting.\n");
+    exit(0);
 }

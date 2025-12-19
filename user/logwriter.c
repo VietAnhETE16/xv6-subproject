@@ -1,94 +1,62 @@
 #include "kernel/types.h"
 #include "kernel/stat.h"
-#include "user/user.h"
 #include "kernel/fcntl.h"
+#include "user/user.h"
 
-//
-// 'sprintf', 'strcpy', and 'strcat' do not exist in the xv6 user library.
-// We must build the string manually.
-//
+#define FIFO_PATH "/dev/fifo/mylog"
 
-// A simple itoa (integer to ASCII) function
+// Helper to convert int to string
 void
 itoa(int x, char *buf)
 {
-  static char digits[] = "0123456789";
-  char tmp[16];
-  int i, j;
-  int neg = 0;
-
-  if (x < 0) {
-    neg = 1;
-    x = -x;
-  }
-
-  i = 0;
-  do {
-    tmp[i++] = digits[x % 10];
-    x /= 10;
-  } while (x);
-
-  if (neg)
-    tmp[i++] = '-';
-  
-  // Reverse the string
-  j = 0;
-  while(--i >= 0)
-    buf[j++] = tmp[i];
-  buf[j] = '\0';
+    int i = 0, j;
+    char tmp[16];
+    if (x == 0) { buf[0] = '0'; buf[1] = 0; return; }
+    while (x > 0) { tmp[i++] = '0' + (x % 10); x /= 10; }
+    for (j = 0; j < i; j++) buf[j] = tmp[i - j - 1];
+    buf[i] = 0;
 }
 
 int
 main(void)
 {
-  char *path = "/dev/fifo/mylog";
+    int i;
+    int fd;
 
-  printf("logwriter: creating fifo...\n");
-  if(mkfifo(path) < 0){
-    fprintf(2, "logwriter: mkfifo failed\n");
-  }
+    // 1. Create the named pipe
+    // We ignore error if it already exists
+    mkfifo(FIFO_PATH); 
 
-  printf("logwriter: opening fifo for write...\n");
-  int fd = open(path, O_WRONLY);
-  if(fd < 0){
-    fprintf(2, "logwriter: open failed\n");
-    exit(1);
-  }
-
-  printf("logwriter: writing logs...\n");
-  for(int i = 0; i < 5; i++){
-    char buf[100];
-    char num_buf[16];
-    char *base_str = "log message ";
-    char *p;
+    printf("Sender: Waiting for a receiver to connect...\n");
     
-    // Manually build the string
-    
-    // 1. Manual strcpy: Copy the base string
-    p = buf;
-    char *s = base_str;
-    while(*s){
-      *p++ = *s++;
+    // 2. Open the pipe (Block until Receiver is ready)
+    fd = open(FIFO_PATH, O_WRONLY);
+    if(fd < 0){
+        printf("Sender: open failed\n");
+        exit(1);
     }
     
-    // 2. Convert the integer to a string
-    itoa(i, num_buf);
-    
-    // 3. Manual strcat: Concatenate the number string
-    s = num_buf;
-    while(*s){
-      *p++ = *s++;
-    }
-    
-    // 4. Null-terminate the final string
-    *p = '\0';
-    
-    // strlen() is available in ulib.c, so this is safe
-    write(fd, buf, strlen(buf) + 1); // +1 to include the null terminator
-    printf("logwriter: wrote '%s'\n", buf);
-  }
+    printf("Sender: Connected! Starting to send logs...\n");
 
-  close(fd);
-  printf("logwriter: done\n");
-  exit(0);
+    // 3. Send 5 messages
+    for(i = 0; i < 5; i++){
+        char msg[64] = "log message ";
+        char num[16];
+        int p = 12; // length of "log message "
+
+        itoa(i, num);
+        for(int k=0; num[k]; k++) msg[p++] = num[k];
+        msg[p++] = '\n';
+        msg[p] = 0;
+
+        write(fd, msg, p);
+        printf("Sender: Sent 'log message %d'\n", i);
+        
+        // Sleep to simulate live streaming and let Receiver print cleanly
+        sleep(20); 
+    }
+
+    close(fd);
+    printf("Sender: Done.\n");
+    exit(0);
 }
