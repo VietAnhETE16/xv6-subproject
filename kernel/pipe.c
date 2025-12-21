@@ -87,28 +87,25 @@ pipealloc(struct file **f0, struct file **f1)
 }
 
 void
-pipeclose(struct pipe *p, int writable)
+pipeclose(struct pipe *pi, int writable)
 {
-  acquire(&p->lock);
+  acquire(&pi->lock);
   if(writable){
-    p->writeopen = 0;
-    wakeup(&p->nread);
+    pi->writeopen = 0;
+    wakeup(&pi->nread);
   } else {
-    p->readopen = 0;
-    wakeup(&p->nwrite);
+    pi->readopen = 0;
+    wakeup(&pi->nwrite);
+  }
+
+  // FIXED: Reset counters when pipe is fully closed so it can be reused cleanly.
+  // This prevents stale counts from interfering with future named pipe sessions.
+  if(pi->readopen == 0 && pi->writeopen == 0){
+    pi->nread = 0;
+    pi->nwrite = 0;
   }
   
-  // MODIFIED: Do not kfree() the pipe.
-  // It's part of the global array and will be reused.
-  // We just leave the lock held while we check.
-  if(p->readopen == 0 && p->writeopen == 0){
-    // The pipe is now fully closed and can be re-allocated.
-    // The named-pipe logic in fileclose() will handle detaching
-    // it from its inode.
-    release(&p->lock);
-    // kfree((char*)p); // <-- REMOVED
-  } else
-    release(&p->lock);
+  release(&pi->lock);
 }
 
 //
