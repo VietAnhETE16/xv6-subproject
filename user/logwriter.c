@@ -5,23 +5,12 @@
 
 #define FIFO_PATH "/dev/fifo/mylog"
 
-// Helper to convert int to string
-void
-itoa(int x, char *buf)
-{
-    int i = 0, j;
-    char tmp[16];
-    if (x == 0) { buf[0] = '0'; buf[1] = 0; return; }
-    while (x > 0) { tmp[i++] = '0' + (x % 10); x /= 10; }
-    for (j = 0; j < i; j++) buf[j] = tmp[i - j - 1];
-    buf[i] = 0;
-}
-
 int
 main(void)
 {
-    int i;
     int fd;
+    char buf[128];
+    int n;
 
     // 1. Create the named pipe
     mkfifo(FIFO_PATH); 
@@ -37,33 +26,32 @@ main(void)
     
     // Sleep briefly to let the Receiver print "Connected" first
     sleep(10);
-    printf("Sender: Connected! Starting to send logs...\n");
+    printf("Sender: Connected! Type your messages (Ctrl-D to stop)...\n");
 
-    // 3. Send 5 messages
-    for(i = 0; i < 5; i++){
-        char msg[64] = "log message ";
-        char num[16];
-        int p = 12; // length of "log message "
-
-        itoa(i, num);
-        for(int k=0; num[k]; k++) msg[p++] = num[k];
-        msg[p++] = '\n';
-        msg[p] = 0;
-
-        write(fd, msg, p);
-
-        // --- THE FIX ---
-        // Sleep for 10 ticks to let the Receiver wake up and 
-        // print its "Received" message FIRST.
-        sleep(10); 
+    // 3. Interactive Loop
+    while(1){
+        // Print a prompt
+        printf("Sender >> ");
         
-        printf("Sender: Sent 'log message %d'\n", i);
+        // Read from Standard Input (Keyboard)
+        n = read(0, buf, sizeof(buf));
         
-        // Wait a bit before sending the next one
-        sleep(10); 
-    }
+        if(n <= 0){
+            break; // EOF (Ctrl+D) or error
+        }
+
+        // Write the input directly to the named pipe
+        if(write(fd, buf, n) != n){
+            printf("Sender: write error\n");
+            break;
+        }
+
+        // Sleep briefly to allow the Receiver (running in background)
+        // to print its output before we print the next "Sender >>" prompt.
+        sleep(5);
+    } 
 
     close(fd);
-    printf("Sender: Done.\n");
+    printf("\nSender: Done.\n");
     exit(0);
 }
