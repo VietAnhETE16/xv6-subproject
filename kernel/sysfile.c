@@ -246,7 +246,7 @@ static struct inode*
 create(char *path, short type, short major, short minor)
 {
   struct inode *ip, *dp;
-  char name[DIRSIZ];
+  char name[MAXPATH];
 
   if((dp = nameiparent(path, name)) == 0)
     return 0;
@@ -256,16 +256,15 @@ create(char *path, short type, short major, short minor)
   if((ip = dirlookup(dp, name, 0)) != 0){
     iunlockput(dp);
     ilock(ip);
-    if(type == T_FILE && (ip->type == T_FILE || ip->type == T_DEVICE))
+    // MODIFY THIS LINE: Add "|| ip->type == T_FIFO"
+    if(type == T_FILE && (ip->type == T_FILE || ip->type == T_DEV || ip->type == T_FIFO))
       return ip;
     iunlockput(ip);
     return 0;
   }
 
-  if((ip = ialloc(dp->dev, type)) == 0){
-    iunlockput(dp);
-    return 0;
-  }
+  if((ip = ialloc(dp->dev, type)) == 0)
+    panic("create: ialloc");
 
   ilock(ip);
   ip->major = major;
@@ -274,31 +273,19 @@ create(char *path, short type, short major, short minor)
   iupdate(ip);
 
   if(type == T_DIR){  // Create . and .. entries.
-    // No ip->nlink++ for ".": avoid cyclic ref count.
+    dp->nlink++;  // for ".."
+    iupdate(dp);
+    // No ip->nlink++ for ".": is done by create.
     if(dirlink(ip, ".", ip->inum) < 0 || dirlink(ip, "..", dp->inum) < 0)
-      goto fail;
+      panic("create dots");
   }
 
   if(dirlink(dp, name, ip->inum) < 0)
-    goto fail;
-
-  if(type == T_DIR){
-    // now that success is guaranteed:
-    dp->nlink++;  // for ".."
-    iupdate(dp);
-  }
+    panic("create: dirlink");
 
   iunlockput(dp);
 
   return ip;
-
- fail:
-  // something went wrong. de-allocate ip.
-  ip->nlink = 0;
-  iupdate(ip);
-  iunlockput(ip);
-  iunlockput(dp);
-  return 0;
 }
 
 uint64
