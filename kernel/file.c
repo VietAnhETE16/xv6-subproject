@@ -54,7 +54,7 @@ filedup(struct file *f)
   release(&ftable.lock);
   return f;
 }
-
+//modification for FIFO
 // Close file f.  (Decrement ref count, close when reaches 0.)
 void
 fileclose(struct file *f)

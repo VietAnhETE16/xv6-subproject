@@ -1,5 +1,5 @@
 #define PIPESIZE 512
-#define NPIPE 16 // Make sure this matches what was in pipe.c
+#define NPIPE 16 // this matches what was in pipe.c
 
 struct pipe {
   struct spinlock lock;
@@ -7,7 +7,7 @@ struct pipe {
   uint nread;     // number of bytes read
   uint nwrite;    // number of bytes written
   int readopen;   // read fd is open
-  int writeopen;  // write fd is open
+  int writeopen;  // write fd is open => Allow Blocking Open(wait for eachother)
 };
 
 extern struct pipe pipes[NPIPE];

@@ -12,24 +12,33 @@ main(void)
     int fd;
     int n;
 
-    printf("Receiver: Connecting to pipe...\n");
+    // Ensure the FIFO exists on the filesystem
+    // If it already exists, mkfifo returns -1, which we can safely ignore
+    mkfifo(FIFO_PATH);
 
-    // 1. Open the pipe (Block until Sender is ready)
+    printf("Reader: Opening pipe... (Waiting for Writer to connect)\n");
+
+    // Open for READING - This blocks in the kernel until a Writer connects
     fd = open(FIFO_PATH, O_RDONLY);
     if(fd < 0){
-        printf("Receiver: Error - Did you run logwriter?\n");
+        printf("Reader: Error - Could not open pipe %s\n", FIFO_PATH);
         exit(1);
     }
 
-    printf("Receiver: Connected! Listening for logs...\n");
+    printf("Reader: Connected! Listening for data...\n");
 
-    // 2. Read loop
+    // Continuous read loop
+    // read() returns 0 when the Writer closes their end of the pipe
     while((n = read(fd, buf, sizeof(buf)-1)) > 0){
-        buf[n] = 0; // Null terminate
-        printf("Receiver: Received -> %s", buf);
+        buf[n] = 0; // Null-terminate string for printf
+        printf("Reader: Received -> %s", buf);
+    }
+
+    if(n < 0) {
+        printf("Reader: Error while reading data\n");
     }
 
     close(fd);
-    printf("Receiver: Pipe closed. Exiting.\n");
+    printf("Reader: Writer disconnected. Exiting.\n");
     exit(0);
 }

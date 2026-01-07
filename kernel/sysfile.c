@@ -335,7 +335,7 @@ sys_open(void)
     end_op();
     return -1;
   }
-
+// modification
   // --- FIFO (Named Pipe) Logic ---
   if(ip->type == T_FIFO) {
     // 1. Find or associate the in-memory pipe

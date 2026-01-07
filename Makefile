@@ -147,6 +147,7 @@ UPROGS=\
 	$U/_logwriter\
 	$U/_fifotest\
 	$U/_mkfifo\
+	$U/_sleeptest\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)
